@@ -1,0 +1,57 @@
+{
+    "mass": 1500,
+    "inertia": {
+        "x": 800,
+        "y": 2000,
+        "z": 2200
+    },
+    "suspension": {
+        "stiffness": 25000,
+        "damping": 2500,
+        "restLength": 0.5
+    },
+    "tires": {
+        "radius": 0.3,
+        "offsets": [
+            {
+                "x": 1.4,
+                "y": 0.8,
+                "z": -0.2
+            },
+            {
+                "x": 1.4,
+                "y": -0.8,
+                "z": -0.2
+            },
+            {
+                "x": -1.4,
+                "y": 0.8,
+                "z": -0.2
+            },
+            {
+                "x": -1.4,
+                "y": -0.8,
+                "z": -0.2
+            }
+        ]
+    },
+    "drivetrain": {
+        "engine": {
+            "maxRPM": 7000,
+            "idleRPM": 1000,
+            "peakTorque": 300,
+            "peakRPM": 4000,
+            "inertia": 0.2
+        },
+        "transmission": {
+            "gears": [
+                3.5,
+                2.0,
+                1.4,
+                1.0,
+                0.8
+            ],
+            "finalDrive": 3.5
+        }
+    }
+}
