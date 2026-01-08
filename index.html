@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Car Simulator Visualization</title>
+    <title>Car Simulator - Static</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #222; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+        }
+
         #info {
             position: absolute;
             top: 10px;
@@ -13,19 +19,20 @@
             color: white;
             font-family: monospace;
             z-index: 100;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             padding: 10px;
+            pointer-events: none;
         }
     </style>
 </head>
+
 <body>
     <div id="info">
-        <h3>Step 2: Physics Test</h3>
-        <p>Controls: Arrow Keys / WASD</p>
+        <h3>Car Simulator (Static)</h3>
+        <p>Controls: WASD / Arrows</p>
         <p>Speed: <span id="speed">0</span> km/h</p>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="/src/main.ts"></script>
 </body>
+
 </html>

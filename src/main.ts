@@ -1,6 +1,18 @@
-const socket = io();
+import * as THREE from 'three';
+import { PhysicsEngine } from './core/PhysicsEngine';
+import { Environment } from './models/Environment';
+import { Vehicle } from './models/Vehicle';
+import { FIXED_TIMESTEP } from './utils/constants';
 
-// Three.js Setup
+// Import config directly (Vite handles JSON)
+import vehicleConfig from '../assets/vehicle_config.json';
+
+// --- PHYSICS SETUP ---
+const env = new Environment();
+const vehicle = new Vehicle(vehicleConfig as any); // Cast to any if interface mismatch, strict type checking later
+const engine = new PhysicsEngine(vehicle, env);
+
+// --- THREE.JS SETUP ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa0a0a0);
 scene.fog = new THREE.Fog(0xa0a0a0, 10, 500);
@@ -55,23 +67,8 @@ carMesh.add(carLines);
 scene.add(carMesh);
 
 // Wheels (4 Cylinders)
-const wheelMeshes = [];
+const wheelMeshes: THREE.Mesh[] = [];
 const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 32);
-// Cylinder is Y-up. Rotate PI/2 around Z to align? No.
-// If Cylinder is Y-up, and we want it to roll along X, axis is Y.
-// ThreeJS Cylinder is aligned along Y axis. 
-// Car Wheel axis is Y (Left/Right). 
-// So Cylinder geometry is already correctly aligned with the local wheel frame axis (Y).
-// BUT wait, we orient the wheel quaternion based on World Frame.
-// If we send a Quaternion that transforms (1,0,0) to Forward, (0,1,0) to Left...
-// And the cylinder geometry is aligned along Y.
-// Then applying the Quaternion will align the cylinder along the Left vector. Correct.
-// However, typically wheels are cylinders with flat sides on +/- Y.
-// Let's create `wheelGeo` and rotate it if needed.
-// Actually, standard cylinder has flat faces at +Y and -Y.
-// This matches the "Axle" axis.
-// So yes, default Cylinder geometry matches the Wheel Spin Axis (Y).
-
 const wheelMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
 
 for (let i = 0; i < 4; i++) {
@@ -81,8 +78,8 @@ for (let i = 0; i < 4; i++) {
     wheelMeshes.push(w);
 }
 
-// Input Handling
-const keys = {
+// --- INPUT HANDLING ---
+const keys: { [key: string]: boolean } = {
     w: false, a: false, s: false, d: false,
     ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false
 };
@@ -95,7 +92,7 @@ window.addEventListener('keyup', (e) => {
     if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
 });
 
-function sendInput() {
+function getInput() {
     let throttle = 0;
     let brake = 0;
     let steering = 0;
@@ -105,11 +102,37 @@ function sendInput() {
     if (keys.a || keys.ArrowLeft) steering = 1.0;
     if (keys.d || keys.ArrowRight) steering = -1.0;
 
-    socket.emit('control_input', { throttle, brake, steering });
+    return { throttle, brake, steering };
 }
 
-// State Update
-socket.on('update_state', (state) => {
+// --- GAME LOOP ---
+// We use a fixed timestep for physics, but variable frame rate for rendering.
+// To keep it simple (and matching the Node approach), we'll do:
+// On every requestAnimationFrame:
+// 1. Process Input
+// 2. Step Physics (maybe multiple times if lagging? simple step for now)
+// 3. Render
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    // 1. Input
+    const input = getInput();
+    engine.applyInput(input);
+
+    // 2. Physics Step
+    // For smoother physics in the browser, we should ideally use delta time.
+    // The engine.step(dt) handles accumulation, so passing a small dt (like 1/60) is fine 
+    // or passing the actual frame delta if we measured it. 
+    // For strict determinism match with your backend, we'll feed it fixed slices.
+    // But engine.step(FIXED_TIMESTEP) is designed for the server loop.
+    // Let's call engine.step(1/60) approximately.
+    engine.step(1 / 60);
+
+    // 3. Get State
+    const state = engine.getState();
+
+    // 4. Update Visuals
     // Update Car Position/Rotation
     carMesh.position.set(state.position.x, state.position.y, state.position.z);
     carMesh.quaternion.set(state.orientation.x, state.orientation.y, state.orientation.z, state.orientation.w);
@@ -121,30 +144,19 @@ socket.on('update_state', (state) => {
             if (t) {
                 wheelMeshes[i].position.set(t.position.x, t.position.y, t.position.z);
                 wheelMeshes[i].quaternion.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
-
-                // Correction: My Quaternion calculation in Vehicle.ts produces a frame where:
-                // X = Forward, Y = Left, Z = Up.
-                // ThreeJS Cylinder is aligned along Y (Height).
-                // So if we apply this Q, the cylinder will align with the Left axis.
-                // This results in the "rolling face" facing Fore/Aft? No.
-                // A cylinder along Y looks like a wheel. Its round face rolls along X.
-                // So this should be correct.
-
-                // However, ThreeJS rotation order or Cylinder orientation might need a visual check.
-                // Usually for a wheel rolling forward (X), the axle is Y.
-                // Cylinder is "tall" along Y. So yes, it represents the axle/width.
-                // The flat caps are Left/Right.
-                // This seems correct.
             }
         }
     }
 
-    // Update Speed UI
+    // Update UI
     const speed = Math.sqrt(state.velocity.x ** 2 + state.velocity.y ** 2 + state.velocity.z ** 2) * 3.6; // km/h
     const rpm = state.engineRPM ? state.engineRPM.toFixed(0) : "0";
     const gear = state.gear;
 
-    document.getElementById('speed').innerText = `${speed.toFixed(0)} km/h | ${rpm} RPM | G: ${gear}`;
+    const speedEl = document.getElementById('speed');
+    if (speedEl) {
+        speedEl.innerText = `${speed.toFixed(0)} km/h | ${rpm} RPM | G: ${gear}`;
+    }
 
     // Camera Follow
     const relativeOffset = new THREE.Vector3(-9, 3, 3.5);
@@ -152,16 +164,9 @@ socket.on('update_state', (state) => {
     const targetPos = carMesh.position.clone().add(cameraOffset);
     camera.position.lerp(targetPos, 0.1); // Smooth follow
     camera.lookAt(carMesh.position);
-});
 
-// Animation Loop
-function animate() {
-    requestAnimationFrame(animate);
-    sendInput();
     renderer.render(scene, camera);
 }
-
-animate();
 
 // Resize
 window.addEventListener('resize', () => {
@@ -169,3 +174,6 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// Start
+animate();
