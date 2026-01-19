@@ -47,6 +47,7 @@ export interface ISimulationState {
 
     // Per-wheel rendering info (Position/Rotation in World Frame)
     wheelTransforms?: { position: Vector3, orientation: Quaternion }[];
+    wheelSkids?: number[]; // 0.0 to 1.0 intensity of skid
 
     // Drivetrain state
     engineRPM: number;

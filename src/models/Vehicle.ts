@@ -20,6 +20,7 @@ export class Vehicle implements IVehicleModel {
 
     // Visualization
     private wheelTransforms: { position: Vector3, orientation: Quaternion }[] = [];
+    private wheelSkids: number[] = [0, 0, 0, 0];
 
     // Constructor now takes Config and uses it
     constructor(config: IVehicleConfig) {
@@ -110,6 +111,7 @@ export class Vehicle implements IVehicleModel {
             };
 
             // --- TIRE FORCE (Pacejka) ---
+            let skidIntensity = 0;
             if (Fz > 0) {
                 const wFwdBody = { x: Math.cos(steerAngle), y: Math.sin(steerAngle), z: 0 };
                 const wLeftBody = { x: -Math.sin(steerAngle), y: Math.cos(steerAngle), z: 0 };
@@ -141,7 +143,12 @@ export class Vehicle implements IVehicleModel {
                     const scale = maxF / totalF;
                     F_tract *= scale;
                     Fy *= scale;
+                    skidIntensity = (totalF - maxF) / maxF; // Rough estimates
                 }
+
+                // Add alpha contribution to skid
+                skidIntensity = Math.max(skidIntensity, Math.min(1.0, (Math.abs(alpha) - 0.15) * 2));
+                this.wheelSkids[i] = Math.min(1.0, Math.max(0, skidIntensity));
 
                 const forceLat = V3U.scale(wLeft, Fy);
                 const forceLong = V3U.scale(wFwd, F_tract);
@@ -153,6 +160,8 @@ export class Vehicle implements IVehicleModel {
                 this.body.addForceAtPoint(totalTire, contactPos);
 
                 tire.wheelSpeed = vLong / tire.radius;
+            } else {
+                this.wheelSkids[i] = 0;
             }
         }
 
@@ -172,6 +181,7 @@ export class Vehicle implements IVehicleModel {
         s.gear = this.trans.currentGear;
         s.engineTorque = this.engine.getTorqueCurve(this.engine.rpm);
         s.wheelTransforms = this.wheelTransforms;
+        s.wheelSkids = this.wheelSkids;
         return s;
     }
 
