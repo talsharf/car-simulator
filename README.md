@@ -1,0 +1,3 @@
+# Car Simulator Project
+
+This project is a deterministic physics-based car simulator built with TypeScript and Three.js, featuring a custom rigid-body physics engine. It simulates complex vehicle dynamics including suspension travel, tire friction, and engine transmission, all driven by a configurable JSON-based data structure. The visual rendering system provides real-time feedback with articulated wheel movements and dynamic skid mark generation on the terrain. Additionally, the architecture cleanly separates the core physics simulation from the rendering layer, ensuring modularity and easier testing.
