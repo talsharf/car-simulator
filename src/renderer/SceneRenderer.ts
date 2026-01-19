@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISimulationState } from '../core/interfaces';
+import { ISimulationState, IEnvironment } from '../core/interfaces';
 
 export class SceneRenderer {
     private scene: THREE.Scene;
@@ -8,7 +8,7 @@ export class SceneRenderer {
     private carMesh: THREE.Mesh;
     private wheelMeshes: THREE.Mesh[] = [];
 
-    constructor() {
+    constructor(env: IEnvironment) {
         // --- THREE.JS SETUP ---
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0xa0a0a0);
@@ -29,21 +29,57 @@ export class SceneRenderer {
         this.scene.add(hemiLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff);
-        dirLight.position.set(10, 10, 10);
+        dirLight.position.set(50, 20, 10); // Lower angle for better shadows on hills
         dirLight.castShadow = true;
         this.scene.add(dirLight);
 
         // Ground
+        // Ground
+        // Create a segmented plane to represent the terrain
+        const size = 400;
+        const segments = 100;
+        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+
+        // Update vertices based on Environment
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            // Height from environment
+            const z = env.getGroundHeight(x, y);
+            positions.setZ(i, z);
+        }
+
+        geometry.computeVertexNormals();
+
         const groundMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(1000, 1000),
-            new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false })
+            geometry,
+            new THREE.MeshPhongMaterial({
+                color: 0x999999,
+                shininess: 0,
+                specular: 0x000000
+            })
         );
         groundMesh.receiveShadow = true;
         this.scene.add(groundMesh);
 
+        // Add wireframe overlay (slightly darker color)
+        // Base is 0x999999 (approx 0.6 gray). Darker would be 0x555555.
+        const wireframe = new THREE.WireframeGeometry(geometry);
+        const line = new THREE.LineSegments(wireframe);
+        // Using a LineBasicMaterial with color significantly darker than 0x999999
+        // 0x999999 is ~153, 153, 153. Let's try 0x555555 (~85, 85, 85).
+        line.material = new THREE.LineBasicMaterial({ color: 0x222222, opacity: 0.75, transparent: true });
+        // Start slightly higher to reduce z-fighting, though lines usually render over faces well enough
+        // Or just adding it as child ensures transforms match (though ground is at 0,0,0)
+        groundMesh.add(line);
+
+        /* Grid is less useful on wavy terrain, disabling or keeping it flat at 0?
+           Let's remove the flat grid as it will intersect the hills uglily.
         const grid = new THREE.GridHelper(1000, 100);
         grid.rotation.x = Math.PI / 2;
-        this.scene.add(grid);
+        this.scene.add(grid); 
+        */
 
         // Car Body (Transparent Box)
         const carGeometry = new THREE.BoxGeometry(4.8, 2.0, 1.5);

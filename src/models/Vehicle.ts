@@ -79,7 +79,13 @@ export class Vehicle implements IVehicleModel {
             const currentHeight = mountPos.z - groundZ;
             const springUncompressed = susp.restLength;
 
-            let springLen = currentHeight - tire.radius;
+            // Distance if touching ground
+            let distToGround = currentHeight - tire.radius;
+
+            // Clamp to max droop (physical limit of shock)
+            const maxSpringLength = susp.restLength + 0.2;
+            const springLen = Math.min(distToGround, maxSpringLength);
+
             const compression = springUncompressed - springLen;
 
             // --- SUSPENSION FORCE ---

@@ -12,7 +12,7 @@ const vehicle = new Vehicle(vehicleConfig as any); // Cast to any if interface m
 const engine = new PhysicsEngine(vehicle, env);
 
 // --- RENDERER SETUP ---
-const sceneRenderer = new SceneRenderer();
+const sceneRenderer = new SceneRenderer(env);
 
 // --- INPUT HANDLING ---
 const keys: { [key: string]: boolean } = {
