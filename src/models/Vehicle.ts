@@ -21,6 +21,7 @@ export class Vehicle implements IVehicleModel {
     // Visualization
     private wheelTransforms: { position: Vector3, orientation: Quaternion }[] = [];
     private wheelSkids: number[] = [0, 0, 0, 0];
+    private lastInput: IControlInput = { throttle: 0, brake: 0, steering: 0 };
 
     // Constructor now takes Config and uses it
     constructor(config: IVehicleConfig) {
@@ -47,6 +48,7 @@ export class Vehicle implements IVehicleModel {
     }
 
     update(dt: number, inputs: IControlInput, env: IEnvironment): void {
+        this.lastInput = inputs;
         const GRAVITY = env.getGravity();
 
         // 1. Drivetrain Update
@@ -187,7 +189,9 @@ export class Vehicle implements IVehicleModel {
         s.gear = this.trans.currentGear;
         s.engineTorque = this.engine.getTorqueCurve(this.engine.rpm);
         s.wheelTransforms = this.wheelTransforms;
+        s.wheelTransforms = this.wheelTransforms;
         s.wheelSkids = this.wheelSkids;
+        s.throttle = this.lastInput.throttle;
         return s;
     }
 

@@ -53,6 +53,7 @@ export interface ISimulationState {
     engineRPM: number;
     gear: number;
     engineTorque: number;
+    throttle?: number; // Added for audio load simulation
 }
 
 /**
