@@ -54,6 +54,7 @@ export interface ISimulationState {
     gear: number;
     engineTorque: number;
     throttle?: number; // Added for audio load simulation
+    groundImpactVelocity?: number; // Added for bump sound
 }
 
 /**

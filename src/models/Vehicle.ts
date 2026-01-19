@@ -22,6 +22,7 @@ export class Vehicle implements IVehicleModel {
     private wheelTransforms: { position: Vector3, orientation: Quaternion }[] = [];
     private wheelSkids: number[] = [0, 0, 0, 0];
     private lastInput: IControlInput = { throttle: 0, brake: 0, steering: 0 };
+    private maxImpactThisFrame: number = 0;
 
     // Constructor now takes Config and uses it
     constructor(config: IVehicleConfig) {
@@ -49,6 +50,7 @@ export class Vehicle implements IVehicleModel {
 
     update(dt: number, inputs: IControlInput, env: IEnvironment): void {
         this.lastInput = inputs;
+        this.maxImpactThisFrame = 0;
         const GRAVITY = env.getGravity();
 
         // 1. Drivetrain Update
@@ -91,6 +93,15 @@ export class Vehicle implements IVehicleModel {
             const compression = springUncompressed - springLen;
 
             // --- SUSPENSION FORCE ---
+            // Check for Impact (Landing)
+            if (susp.prevCompression <= 0 && compression > 0) {
+                // Just landed
+                const impactVel = compression / dt;
+                if (impactVel > this.maxImpactThisFrame) {
+                    this.maxImpactThisFrame = impactVel;
+                }
+            }
+
             const compressionForce = susp.update(compression, dt);
             const Fz = Math.max(0, compressionForce);
 
@@ -192,6 +203,7 @@ export class Vehicle implements IVehicleModel {
         s.wheelTransforms = this.wheelTransforms;
         s.wheelSkids = this.wheelSkids;
         s.throttle = this.lastInput.throttle;
+        s.groundImpactVelocity = this.maxImpactThisFrame;
         return s;
     }
 

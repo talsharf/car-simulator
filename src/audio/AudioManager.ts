@@ -1,12 +1,14 @@
 import { ISimulationState } from '../core/interfaces';
 import { EngineSound } from './EngineSound';
 import { SkidSound } from './SkidSound';
+import { BumpSound } from './BumpSound';
 
 export class AudioManager {
     private ctx: AudioContext;
     private masterGain: GainNode;
     private engineSound: EngineSound;
     private skidSound: SkidSound;
+    private bumpSound: BumpSound;
     private initialized: boolean = false;
     private isMuted: boolean = false;
 
@@ -21,6 +23,7 @@ export class AudioManager {
 
         this.engineSound = new EngineSound(this.ctx, this.masterGain);
         this.skidSound = new SkidSound(this.ctx, this.masterGain);
+        this.bumpSound = new BumpSound(this.ctx, this.masterGain);
     }
 
     async initialize() {
@@ -52,6 +55,12 @@ export class AudioManager {
             maxSkid = Math.max(...state.wheelSkids);
         }
         this.skidSound.update(maxSkid);
+
+        // Bumps
+        if (state.groundImpactVelocity && state.groundImpactVelocity > 1.0) {
+            // Trigger threshold 1.0 m/s
+            this.bumpSound.trigger(state.groundImpactVelocity);
+        }
     }
 
     toggleMute(): boolean {
