@@ -94,6 +94,8 @@ export interface IEnvironment {
     getGravity(): Vector3;
     getGroundHeight(x: number, y: number): number;
     getGroundNormal(x: number, y: number): Vector3;
+    getFriction(x: number, y: number): number;
+    getColor(x: number, y: number): { r: number; g: number; b: number };
 }
 
 /**

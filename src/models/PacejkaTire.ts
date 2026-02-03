@@ -23,10 +23,14 @@ export class PacejkaTire {
      * @param fz Vertical load (Newtons) - must be > 0
      * @param slipAngle Lateral slip (Radians)
      * @param slipRatio Longitudinal slip (ratio, -1 to 1 usually)
+     * @param frictionScale Multiplier for friction (default 1.0)
      */
-    calculate(fz: number, slipAngle: number, slipRatio: number): ITireForces {
+    calculate(fz: number, slipAngle: number, slipRatio: number, frictionScale: number = 1.0): ITireForces {
         // Valid load check
         if (fz <= 0) return { fx: 0, fy: 0, mz: 0 };
+
+        const scaledLatD = this.latD * frictionScale;
+        const scaledLongD = this.longD * frictionScale;
 
         // 1. Lateral Force (Fy)
         // y = D * sin(C * atan(B*x - E*(B*x - atan(B*x))))
@@ -34,7 +38,7 @@ export class PacejkaTire {
 
         // Input x is slip angle
         const alpha = slipAngle;
-        const Fy_norm = this.magicFormula(alpha, this.latB, this.latC, this.latD, this.latE);
+        const Fy_norm = this.magicFormula(alpha, this.latB, this.latC, scaledLatD, this.latE);
         const Fy = -Fy_norm * fz; // Resists slip. Negative sign convention?
         // If slip is positive (turning left implies slip vector right?), force should be left.
         // Standard: Alpha positive -> Force negative.
@@ -42,7 +46,7 @@ export class PacejkaTire {
         // 2. Longitudinal Force (Fx)
         // Input x is slip ratio
         const kappa = slipRatio;
-        const Fx_norm = this.magicFormula(kappa, this.longB, this.longC, this.longD, this.longE);
+        const Fx_norm = this.magicFormula(kappa, this.longB, this.longC, scaledLongD, this.longE);
         const Fx = Fx_norm * fz; // Drives/Brakes. Scaling sign matches slip.
 
         // Combined Slip (simplified friction circle limit)
@@ -55,7 +59,7 @@ export class PacejkaTire {
         // This is "poor man's combined slip" but works for Step 3.
         /*
         const totalForce = Math.sqrt(Fx*Fx + Fy*Fy);
-        const maxForce = fz * Math.max(this.latD, this.longD); // Approximate peak mu
+        const maxForce = fz * Math.max(scaledLatD, scaledLongD); // Approximate peak mu
         
         if (totalForce > maxForce) {
             const scale = maxForce / totalForce;

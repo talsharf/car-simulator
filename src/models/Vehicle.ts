@@ -22,6 +22,7 @@ export class Vehicle implements IVehicleModel {
     private wheelTransforms: { position: Vector3, orientation: Quaternion }[] = [];
     private wheelSkids: number[] = [0, 0, 0, 0];
     private lastInput: IControlInput = { throttle: 0, brake: 0, steering: 0 };
+    private currentSteer: number = 0; // -1 to 1 current steering value
     private maxImpactThisFrame: number = 0;
 
     // Constructor now takes Config and uses it
@@ -53,6 +54,28 @@ export class Vehicle implements IVehicleModel {
         const speed = V3U.magnitude(this.body.velocity);
         if (inputs.throttle === 0 && inputs.brake === 0 && speed < 2.0) {
             inputs.brake = 0.5; // Medium braking
+        }
+
+        // --- SMOOTH STEERING LOGIC ---
+        const STEER_SPEED = 1.0;   // Rate of steering increase (0 to 1 in 1.0s)
+        const RETURN_SPEED = 2.0;  // Rate of returning to center (slower)
+
+        let target = inputs.steering;
+        let delta = target - this.currentSteer;
+
+        // Determine which speed to use
+        // If moving away from center (magnitude increasing) use STEER_SPEED
+        // If returning to center (magnitude decreasing or crossing 0) use RETURN_SPEED
+        let rate = STEER_SPEED;
+        if (Math.abs(target) < Math.abs(this.currentSteer) || Math.sign(target) !== Math.sign(this.currentSteer)) {
+            rate = RETURN_SPEED;
+        }
+
+        // Apply interpolation
+        if (Math.abs(delta) < rate * dt) {
+            this.currentSteer = target;
+        } else {
+            this.currentSteer += Math.sign(delta) * rate * dt;
         }
 
         this.lastInput = inputs;
@@ -123,7 +146,7 @@ export class Vehicle implements IVehicleModel {
 
             // --- STEERING / ORIENTATION ---
             let steerAngle = 0;
-            if (i < 2) steerAngle = inputs.steering * 0.5;
+            if (i < 2) steerAngle = this.currentSteer * 0.5; // Use smoothed steering
 
             const bodyQ = this.body.orientation;
             const steerQ = { x: 0, y: 0, z: Math.sin(steerAngle / 2), w: Math.cos(steerAngle / 2) };
@@ -159,10 +182,13 @@ export class Vehicle implements IVehicleModel {
                     F_tract -= inputs.brake * 4000 * Math.sign(vLong);
                 }
 
-                const pacejkaRes = this.pacejka.calculate(Fz, alpha, 0);
+                const contactPos = V3U.add(wheelCenter, V3U.scale(V3U.rotate(wUpBody, bodyQ), -tire.radius));
+                const frictionScale = env.getFriction(contactPos.x, contactPos.y);
+
+                const pacejkaRes = this.pacejka.calculate(Fz, alpha, 0, frictionScale);
                 let Fy = pacejkaRes.fy;
 
-                const maxF = Fz * 1.5;
+                const maxF = Fz * 1.5 * frictionScale;
                 const totalF = Math.sqrt(F_tract * F_tract + Fy * Fy);
                 if (totalF > maxF) {
                     const scale = maxF / totalF;
@@ -179,9 +205,7 @@ export class Vehicle implements IVehicleModel {
                 const forceLong = V3U.scale(wFwd, F_tract);
                 const totalTire = V3U.add(forceLat, forceLong);
 
-                // Contact patch 
-                const contactPos = V3U.add(wheelCenter, V3U.scale(V3U.rotate(wUpBody, bodyQ), -tire.radius));
-
+                // Contact patch (already calculated above)
                 this.body.addForceAtPoint(totalTire, contactPos);
 
                 tire.wheelSpeed = vLong / tire.radius;
