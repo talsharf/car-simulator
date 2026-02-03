@@ -1,91 +1,110 @@
 export class SkidSound {
     private ctx: AudioContext;
-    private filter: BiquadFilterNode;
     private gain: GainNode;
+    private buffer: AudioBuffer | null = null;
     private source: AudioBufferSourceNode | null = null;
-    private noiseBuffer: AudioBuffer | null = null;
-    private shaper: WaveShaperNode | null = null;
-    private isStarted: boolean = false;
+    private isLoaded: boolean = false;
+    private isPlaying: boolean = false;
 
     constructor(ctx: AudioContext, destination: AudioNode) {
         this.ctx = ctx;
-
-        // Create Pink Noise Buffer
-        const bufferSize = ctx.sampleRate * 2.0; // 2 seconds loop
-        this.noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = this.noiseBuffer.getChannelData(0);
-
-        // Simple white noise for now, or approx pink
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1);
-        }
-
-        // Bandpass Filter to shape it into a "screech"
-        // Bandpass Filter
-        // Q=8.0 is resonant but wider/messier than a pure whistle (Q=15)
-        this.filter = ctx.createBiquadFilter();
-        this.filter.type = 'bandpass';
-        this.filter.frequency.value = 2000;
-        this.filter.Q.value = 8.0;
-
-        // Distortion (WaveShaper)
-        this.shaper = ctx.createWaveShaper();
-        this.shaper.curve = this.makeDistortionCurve(1000); // Increased from 400
-        this.shaper.oversample = '4x';
-
-        // Volume
         this.gain = ctx.createGain();
-        this.gain.gain.value = 0.0;
-
-        // Chain: Source -> Filter -> Shaper -> Gain -> Dest
-        this.filter.connect(this.shaper);
-        this.shaper.connect(this.gain);
+        this.gain.gain.value = 0; // Start silent
         this.gain.connect(destination);
     }
 
-    private makeDistortionCurve(amount: number) {
-        const k = typeof amount === 'number' ? amount : 50;
-        const n_samples = 44100;
-        const curve = new Float32Array(n_samples);
-        const deg = Math.PI / 180;
+    async load() {
+        try {
+            const response = await fetch('/assets/skid.m4a');
+            const arrayBuffer = await response.arrayBuffer();
+            this.buffer = await this.ctx.decodeAudioData(arrayBuffer);
 
-        for (let i = 0; i < n_samples; ++i) {
-            const x = (i * 2) / n_samples - 1;
-            curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
-        }
-        return curve;
-    }
+            // Post-processing: Apply fade in/out to smoothing loop points
+            this.applyFadeEdges(this.buffer);
 
-    start() {
-        if (!this.isStarted && this.noiseBuffer) {
-            this.source = this.ctx.createBufferSource();
-            this.source.buffer = this.noiseBuffer;
-            this.source.loop = true;
-            this.source.connect(this.filter);
-            this.source.start();
-            this.isStarted = true;
+            this.isLoaded = true;
+            console.log("Skid sound loaded");
+        } catch (e) {
+            console.error("Failed to load skid sound", e);
         }
     }
 
-    update(maxSkid: number) {
-        if (!this.isStarted) return;
+    private applyFadeEdges(buffer: AudioBuffer) {
+        const fadeDuration = 0.05; // 50ms fade
+        const length = buffer.length;
+        const rate = buffer.sampleRate;
+        const fadeSamples = Math.floor(fadeDuration * rate);
 
-        const now = this.ctx.currentTime;
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+            const data = buffer.getChannelData(channel);
 
-        // Modulation
-        // Higher skid -> Higher volume, higher pitch
+            // Fade In
+            for (let i = 0; i < fadeSamples; i++) {
+                data[i] *= (i / fadeSamples);
+            }
 
-        // Volume: Threshold at 0.2, ramp to 1.0
-        let targetVol = 0;
-        if (maxSkid > 0.2) {
-            // Sharper ramp
-            targetVol = Math.min(0.6, (maxSkid - 0.2) * 3.0); // Lower max gain because distortion boosts loudness
+            // Fade Out
+            for (let i = 0; i < fadeSamples; i++) {
+                data[length - 1 - i] *= (i / fadeSamples);
+            }
         }
-        this.gain.gain.setTargetAtTime(targetVol, now, 0.05);
+    }
 
-        // Pitch shift
-        // 1500Hz -> 3000Hz (Higher pitch)
-        const targetFreq = 1500 + (maxSkid * 1500);
-        this.filter.frequency.setTargetAtTime(targetFreq, now, 0.1);
+    update(wheelSkids: number[]) {
+        if (!this.isLoaded || !this.buffer) return;
+
+        // Find max skid intensity across all wheels
+        let maxSkid = 0;
+        for (const skid of wheelSkids) {
+            if (skid > maxSkid) maxSkid = skid;
+        }
+
+        // Threshold to start playing
+        if (maxSkid > 0.1) {
+            if (!this.isPlaying) {
+                this.startSound();
+            }
+
+            // Volume curve: 0.1 skid -> 0 vol, 1.0 skid -> 6.4 vol (Increased by 8x total)
+            const targetVol = Math.min(6.4, (maxSkid - 0.1) * 12.0);
+
+            const now = this.ctx.currentTime;
+            this.gain.gain.setTargetAtTime(targetVol, now, 0.1);
+
+            // Optional: Pitch modulation based on intensity (screechier when harder skid)
+            if (this.source) {
+                // detune is in cents. +200 cents = 1 tone.
+                // maxSkid 1.0 -> +400 cents (major third)
+                this.source.detune.setTargetAtTime(maxSkid * 400, now, 0.1);
+            }
+
+        } else {
+            // Fade out
+            if (this.isPlaying) {
+                const now = this.ctx.currentTime;
+                this.gain.gain.setTargetAtTime(0, now, 0.1);
+
+                // Stop if silent for a while? 
+                // Alternatively, just keep it looping silent to avoid recreate overhead
+                // For now, let's keep it running but silent.
+                if (this.gain.gain.value < 0.001) {
+                    // Check logic below to actually stop if needed, but keeping it running is smoother for intermittent skids
+                }
+            }
+        }
+    }
+
+    private startSound() {
+        if (this.source) {
+            this.source.stop();
+            this.source.disconnect();
+        }
+
+        this.source = this.ctx.createBufferSource();
+        this.source.buffer = this.buffer;
+        this.source.loop = true;
+        this.source.connect(this.gain);
+        this.source.start();
+        this.isPlaying = true;
     }
 }

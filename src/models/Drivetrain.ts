@@ -15,13 +15,17 @@ export class Engine {
     // Config for curve
     peakTorque: number = 300;
     peakRPM: number = 4000;
+    frictionCoefficient: number = 0.01;
 
-    constructor(config: { maxRPM: number, idleRPM: number, peakTorque: number, peakRPM: number, inertia: number }) {
+    constructor(config: { maxRPM: number, idleRPM: number, peakTorque: number, peakRPM: number, inertia: number, frictionCoefficient?: number }) {
         this.maxRPM = config.maxRPM;
         this.idleRPM = config.idleRPM;
         this.peakTorque = config.peakTorque;
         this.peakRPM = config.peakRPM;
         this.inertia = config.inertia;
+        if (config.frictionCoefficient !== undefined) {
+            this.frictionCoefficient = config.frictionCoefficient;
+        }
         this.rpm = this.idleRPM; // Start at idle
     }
 
@@ -39,18 +43,8 @@ export class Engine {
     }
 
     update(dt: number, throttle: number, loadTorque: number): number {
-        // ... (Logic same, but constructor handled init)
-        // I need to include the update method here or ensure replace works.
-        // I will copy the update method content to be safe or just target up to update.
-        // Actually, 'update' is below. I'll include it or let it be.
-        // The ReplaceFileContent works by replacing TargetContent.
-        // I need to be careful not to delete 'update'.
-        // My ReplacementContent ends before 'update'. 
-
-        // Wait, I need to match the TargetContent exactly.
-        // Let's rewrite the Class Engine fully.
         const combustionTorque = this.getTorqueCurve(this.rpm) * throttle;
-        const frictionTorque = this.rpm * 0.01;
+        const frictionTorque = this.rpm * this.frictionCoefficient;
 
         const netTorque = combustionTorque - frictionTorque - loadTorque;
 
@@ -60,7 +54,9 @@ export class Engine {
         if (this.rpm < this.idleRPM) this.rpm = this.idleRPM;
         if (this.rpm > this.maxRPM) this.rpm = this.maxRPM;
 
-        return combustionTorque;
+        // Return net engine output (combustion - internal friction)
+        // When throttle is 0, combustion is 0, so this returns negative torque (braking)
+        return combustionTorque - frictionTorque;
     }
 }
 

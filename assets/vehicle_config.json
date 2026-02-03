@@ -41,7 +41,8 @@
             "idleRPM": 1000,
             "peakTorque": 300,
             "peakRPM": 4000,
-            "inertia": 0.2
+            "inertia": 0.2,
+            "frictionCoefficient": 0.02
         },
         "transmission": {
             "gears": [

@@ -132,6 +132,7 @@ export interface IVehicleConfig {
             peakTorque: number;
             peakRPM: number;
             inertia: number;
+            frictionCoefficient?: number; // Optional, default 0.01
         };
         transmission: {
             gears: number[];

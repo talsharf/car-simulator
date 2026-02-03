@@ -49,6 +49,12 @@ export class Vehicle implements IVehicleModel {
     }
 
     update(dt: number, inputs: IControlInput, env: IEnvironment): void {
+        // Auto-brake if idle and moving slowly to prevent drift
+        const speed = V3U.magnitude(this.body.velocity);
+        if (inputs.throttle === 0 && inputs.brake === 0 && speed < 2.0) {
+            inputs.brake = 0.5; // Medium braking
+        }
+
         this.lastInput = inputs;
         this.maxImpactThisFrame = 0;
         const GRAVITY = env.getGravity();
@@ -186,7 +192,7 @@ export class Vehicle implements IVehicleModel {
 
         // Body Forces
         this.body.addForce(V3U.scale(GRAVITY, this.body.mass));
-        const speed = V3U.magnitude(this.body.velocity);
+
         const dragMag = 0.5 * 1.2 * 0.3 * 2.2 * speed * speed;
         const dragDir = V3U.scale(V3U.normalize(this.body.velocity), -1);
         this.body.addForce(V3U.scale(dragDir, dragMag));

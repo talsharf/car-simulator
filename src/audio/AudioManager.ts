@@ -1,14 +1,14 @@
 import { ISimulationState } from '../core/interfaces';
 import { EngineSound } from './EngineSound';
-import { SkidSound } from './SkidSound';
 import { BumpSound } from './BumpSound';
+import { SkidSound } from './SkidSound';
 
 export class AudioManager {
     private ctx: AudioContext;
     private masterGain: GainNode;
     private engineSound: EngineSound;
-    private skidSound: SkidSound;
     private bumpSound: BumpSound;
+    private skidSound: SkidSound;
     private initialized: boolean = false;
     private isMuted: boolean = false;
 
@@ -21,9 +21,9 @@ export class AudioManager {
         this.masterGain.gain.value = 0.5; // Master volume
         this.masterGain.connect(this.ctx.destination);
 
-        this.engineSound = new EngineSound(this.ctx, this.masterGain);
-        this.skidSound = new SkidSound(this.ctx, this.masterGain);
+        this.engineSound = new EngineSound(this.ctx, this.masterGain, 0.1);
         this.bumpSound = new BumpSound(this.ctx, this.masterGain);
+        this.skidSound = new SkidSound(this.ctx, this.masterGain);
     }
 
     async initialize() {
@@ -35,7 +35,7 @@ export class AudioManager {
         }
 
         this.engineSound.start();
-        this.skidSound.start();
+        await this.skidSound.load();
 
         this.initialized = true;
         console.log("Audio Initialized");
@@ -49,17 +49,15 @@ export class AudioManager {
         const load = state.throttle || 0;
         this.engineSound.update(rpm, load);
 
-        // Skids
-        let maxSkid = 0;
-        if (state.wheelSkids) {
-            maxSkid = Math.max(...state.wheelSkids);
-        }
-        this.skidSound.update(maxSkid);
-
         // Bumps
         if (state.groundImpactVelocity && state.groundImpactVelocity > 1.0) {
             // Trigger threshold 1.0 m/s
             this.bumpSound.trigger(state.groundImpactVelocity);
+        }
+
+        // Skids
+        if (state.wheelSkids) {
+            this.skidSound.update(state.wheelSkids);
         }
     }
 

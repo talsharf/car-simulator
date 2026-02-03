@@ -5,8 +5,10 @@ export class EngineSound {
     private lfo: OscillatorNode;
     private lfoGain: GainNode;
     private isStarted: boolean = false;
+    private baseVolume: number;
 
-    constructor(ctx: AudioContext, destination: AudioNode) {
+    constructor(ctx: AudioContext, destination: AudioNode, baseVolume: number = 0.1) {
+        this.baseVolume = baseVolume;
         this.ctx = ctx;
 
         // Main oscillator (Sawtooth for "buzz")
@@ -27,7 +29,7 @@ export class EngineSound {
 
         // Volume control
         this.gain = ctx.createGain();
-        this.gain.gain.value = 0.1; // Base volume
+        this.gain.gain.value = this.baseVolume; // Base volume
 
         // Chain: Main_Osc -> Gain -> Dest
         this.osc.connect(this.gain);
@@ -62,7 +64,7 @@ export class EngineSound {
         const loadFactor = load * 0.3;
         const rpmFactor = (rpm / 7000) * 0.2;
 
-        const targetVol = 0.1 + loadFactor + rpmFactor;
+        const targetVol = this.baseVolume + loadFactor + rpmFactor;
 
         this.gain.gain.setTargetAtTime(Math.min(0.6, targetVol), now, 0.1);
     }
