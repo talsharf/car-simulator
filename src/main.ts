@@ -5,7 +5,7 @@ import { SceneRenderer } from './renderer/SceneRenderer';
 import { AudioManager } from './audio/AudioManager';
 
 // Import config directly (Vite handles JSON)
-import vehicleConfig from '../assets/vehicle_config.json';
+import vehicleConfig from '../public/assets/vehicle_config.json';
 
 // --- PHYSICS SETUP ---
 const env = new Environment();
