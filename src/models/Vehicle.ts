@@ -221,6 +221,93 @@ export class Vehicle implements IVehicleModel {
         const dragDir = V3U.scale(V3U.normalize(this.body.velocity), -1);
         this.body.addForce(V3U.scale(dragDir, dragMag));
 
+        // --- CHASSIS COLLISION ---
+        // Simple bounding box approximation using 8 corners or just 4 bumper corners + roof
+        // Let's use 6 points: Front/Rear bumpers at bottom level, and 4 roof corners? 
+        // Or just 4 corners at appropriate height.
+        // A standard sedan is roughly 4.5m long, 1.8m wide. 
+        // Origin is usually center of rear axle or CG. Let's assume CG is roughly center.
+
+        // Define points in Vehicle Frame (x-forward, y-left, z-up)
+        // Adjust these based on the visual model later if needed.
+        const chassisPoints = [
+            { x: 2.2, y: 0.8, z: 0.0 },   // Front Left Bumper
+            { x: 2.2, y: -0.8, z: 0.0 },  // Front Right Bumper
+            { x: -2.2, y: 0.8, z: 0.0 },  // Rear Left Bumper
+            { x: -2.2, y: -0.8, z: 0.0 }, // Rear Right Bumper
+            { x: 0.0, y: 0.8, z: 1.2 },   // Roof Left
+            { x: 0.0, y: -0.8, z: 1.2 }   // Roof Right
+        ];
+        // Note: z=0.0 is relative to determining the "bottom" of the chassis. 
+        // If CG is at z=0.0 relative to body center, then bottom is -0.something.
+        // But usually CG is above the bottom. Let's assume CG is at z=0.4m above ground.
+        // So bottom points should be z=-0.3 or so relative to CG.
+        // Let's refine based on typical CG height.
+        // If wheel radius is 0.33m, center is at 0.33m. CG likely at 0.5m.
+        // So bottom of chassis is around 0.2m off ground? 
+        // Let's say bottom points are at z = -0.2 (relative to CG)
+        // Roof points at z = 0.8 (relative to CG)
+
+        const relativePoints = [
+            { x: 2.1, y: 0.8, z: -0.2 },
+            { x: 2.1, y: -0.8, z: -0.2 },
+            { x: -2.1, y: 0.8, z: -0.2 },
+            { x: -2.1, y: -0.8, z: -0.2 },
+            { x: 0.5, y: 0.8, z: 0.8 },
+            { x: 0.5, y: -0.8, z: 0.8 },
+            { x: -1.0, y: 0.8, z: 0.8 },
+            { x: -1.0, y: -0.8, z: 0.8 }
+        ];
+
+        for (const pt of relativePoints) {
+            const worldPos = V3U.add(this.body.position, V3U.rotate(pt, this.body.orientation));
+            const groundZ = env.getGroundHeight(worldPos.x, worldPos.y);
+
+            if (worldPos.z < groundZ) {
+                // Penetration!
+                const depth = groundZ - worldPos.z;
+
+                // Velocity at this point
+                const r = V3U.rotate(pt, this.body.orientation);
+                const pointVel = V3U.add(this.body.velocity, V3U.cross(this.body.angularVelocity, r));
+
+                // 1. Penalty Force (Spring)
+                const STIFFNESS = 30000; // Hard collision
+                const DAMPING = 2000;
+
+                // Normal is roughly Up for terrain map, strictly should use getGroundNormal(x,y)
+                // Let's assume terrain is mostly flat-ish or access normal
+                const normal = env.getGroundNormal(worldPos.x, worldPos.y);
+                const vNormal = V3U.dot(pointVel, normal);
+
+                // F_spring = k * depth
+                // F_damp = -c * v_normal
+                let normalForceMag = STIFFNESS * depth - DAMPING * vNormal;
+                normalForceMag = Math.max(0, normalForceMag);
+
+                const F_normal = V3U.scale(normal, normalForceMag);
+
+                // 2. Friction
+                // Oppose tangential velocity
+                const vTangential = V3U.sub(pointVel, V3U.scale(normal, vNormal));
+                const vTanMag = V3U.magnitude(vTangential);
+
+                let F_friction = { x: 0, y: 0, z: 0 };
+                if (vTanMag > 0.01) {
+                    const FRICTION_COEFF = 0.6; // Body scraping on ground
+                    const frictionMag = normalForceMag * FRICTION_COEFF;
+                    const frictionDir = V3U.scale(vTangential, -1 / vTanMag);
+                    F_friction = V3U.scale(frictionDir, frictionMag);
+                }
+
+                // Apply
+                this.body.addForceAtPoint(V3U.add(F_normal, F_friction), worldPos);
+
+                // Also add extra drag/damping to stop spinning if multiple points trigger?
+                // Friction should handle it naturally.
+            }
+        }
+
         this.body.integrate(dt);
     }
 
